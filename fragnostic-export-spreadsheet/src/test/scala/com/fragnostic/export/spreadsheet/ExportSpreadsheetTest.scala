@@ -1,18 +1,18 @@
-package com.fragnostic.export.excel
+package com.fragnostic.export.spreadsheet
 
 import java.util.Locale
 
-import com.fragnostic.export.excel.support.{ BaseTest, SomeRow }
+import com.fragnostic.export.spreadsheet.support.{ BaseTest, SomeRow }
 import org.apache.poi.ss.usermodel.Row
 
 /**
  * Created by fernandobrule on 5/19/17.
  */
-class ExportExcelTest extends BaseTest {
+class ExportSpreadsheetTest extends BaseTest {
 
-  describe("Export Excel Test") {
+  describe("Export Spreadsheet Test") {
 
-    it("Can Export Excel") {
+    it("Can Export Spreadsheet") {
 
       val list = List(
         SomeRow("Pepe", "+56 9 7979 7865"),
@@ -20,15 +20,14 @@ class ExportExcelTest extends BaseTest {
 
       val sheetName: String = "pepe"
       val headers: Array[String] = Array("Name", "Telefono")
-      val enables = (true, true, true)
 
-      def newRow(locale: Locale, someRow: SomeRow, row: Row, enables: (Boolean, Boolean, Boolean)): Row = {
+      def newRow(locale: Locale, someRow: SomeRow, row: Row): Row = {
         row.createCell(0).setCellValue(someRow.name)
         row.createCell(1).setCellValue(someRow.tel)
         row
       }
 
-      val wb = CakeService.exportExcelService.exportWb(list, sheetName, headers, enables, newRow) fold (
+      val wb = CakeServiceExportSpreadsheet.export.workbook(list, sheetName, headers, newRow) fold (
         error => throw new IllegalStateException(error),
         wb => wb)
 

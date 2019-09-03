@@ -51,7 +51,7 @@ lazy val fragnosticProject = Project(
       s"sbt:${Project.extract(state).currentProject.id}" + Def.withColor("> ", Option(scala.Console.CYAN))
     }
   )).aggregate(
-    fragnosticExportExcel
+    fragnosticExportSpreadsheet
   ).enablePlugins()
  
 lazy val manifestSetting = packageOptions += {
@@ -71,7 +71,7 @@ lazy val manifestSetting = packageOptions += {
 
 lazy val doNotPublish = Seq(publish := {}, publishLocal := {}, PgpKeys.publishSigned := {}, PgpKeys.publishLocalSigned := {})
 
-lazy val fragnosticExportExcel = Project(
+lazy val fragnosticExportSpreadsheet = Project(
   id = "fragnostic-export-spreadsheet",
   base = file("fragnostic-export-spreadsheet")).settings(fragnosticSettings ++ Seq(
     libraryDependencies ++= Seq(

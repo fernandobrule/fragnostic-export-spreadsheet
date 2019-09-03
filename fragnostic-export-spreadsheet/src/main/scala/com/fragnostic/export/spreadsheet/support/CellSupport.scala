@@ -1,4 +1,4 @@
-package com.fragnostic.export.excel.support
+package com.fragnostic.export.spreadsheet.support
 
 import org.apache.poi.ss.usermodel.Row
 
