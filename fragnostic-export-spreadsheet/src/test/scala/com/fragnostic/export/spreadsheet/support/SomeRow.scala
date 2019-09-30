@@ -1,4 +1,4 @@
-package com.fragnostic.export.excel.support
+package com.fragnostic.export.spreadsheet.support
 
 /**
  * Created by fernandobrule on 5/19/17.

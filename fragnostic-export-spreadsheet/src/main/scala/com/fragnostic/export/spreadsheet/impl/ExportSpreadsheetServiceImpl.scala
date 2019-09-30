@@ -1,9 +1,9 @@
-package com.fragnostic.export.excel.impl
+package com.fragnostic.export.spreadsheet.impl
 
 import java.io.{ ByteArrayOutputStream, FileOutputStream }
 import java.util.{ Locale, UUID }
 
-import com.fragnostic.export.excel.api.ExportExcelServiceApi
+import com.fragnostic.export.spreadsheet.api.ExportSpreadsheetServiceApi
 import org.apache.poi.hssf.usermodel.HSSFWorkbook
 import org.apache.poi.ss.usermodel._
 import org.slf4j.LoggerFactory
@@ -14,13 +14,11 @@ import org.slf4j.LoggerFactory
  * https://poi.apache.org/spreadsheet/quick-guide.html
  *
  */
-trait ExportExcelServiceImpl extends ExportExcelServiceApi {
+trait ExportSpreadsheetServiceImpl extends ExportSpreadsheetServiceApi {
 
   private def logger = LoggerFactory.getLogger(getClass)
 
-  private val debug = false
-
-  def exportExcelService = new DefaultExportExcelService()
+  def exportSpreadsheetService = new DefaultExportSpreadsheetService()
 
   def getBytes(wb: Workbook): Array[Byte] = {
 
@@ -37,11 +35,10 @@ trait ExportExcelServiceImpl extends ExportExcelServiceApi {
 
   //
   // HEADER
-  def addHeader(wb: Workbook, header: Array[String], row: Row) =
+  def addHeader(wb: Workbook, header: Array[String], row: Row): Unit =
     header.zipWithIndex.foreach {
       case (head, idx) =>
-
-        if (debug) logger.info(s"col:$idx - head:$head")
+        if (logger.isInfoEnabled) logger.info(s"addHeader() - col:$idx - head:$head")
 
         val cell = row.createCell(idx)
         cell.setCellValue(head)
@@ -60,25 +57,25 @@ trait ExportExcelServiceImpl extends ExportExcelServiceApi {
         cell.setCellStyle(style)
     }
 
-  class DefaultExportExcelService extends ExportExcelServiceApi {
+  class DefaultExportSpreadsheetService extends ExportSpreadsheetServiceApi {
 
-    override def export[T, S](list: List[T], fileName: String, sheetName: String, headers: Array[String], enables: S, newRow: (Locale, T, Row, S) => Row): Either[String, String] =
-      exportBytes(list, sheetName, headers, enables, newRow) fold (
-        error => Left(error),
+    override def spreadsheet[T, S](
+      list: List[T],
+      basePathExport: String,
+      fileName: String,
+      sheetName: String,
+      headers: Array[String],
+      newRow: (Locale, T, Row) => Row): Either[String, String] =
+      bytes(list, sheetName, headers, newRow) fold (error => Left(error),
         bytes => {
-
           val uuid = UUID.randomUUID().toString
-
-          val javaIoTmpdir = System.getProperty("java.io.tmpdir")
-          val basePath = javaIoTmpdir // "/Users/fernandobrule/Tmp"
-
-          val ruta = s"$basePath/$fileName-$uuid.xls"
+          val ruta = s"$basePathExport/$fileName-$uuid.xls"
           try {
             val fos: FileOutputStream = new FileOutputStream(ruta)
             fos.write(bytes)
             fos.close()
 
-            if (debug) logger.info(s"export | bytes saved on ruta:$ruta")
+            if (logger.isInfoEnabled) logger.info(s"export | bytes saved on ruta:$ruta")
 
             Right(uuid)
 
@@ -92,12 +89,19 @@ trait ExportExcelServiceImpl extends ExportExcelServiceApi {
           }
         })
 
-    override def exportBytes[T, S](list: List[T], sheetName: String, headers: Array[String], enables: S, newRow: (Locale, T, Row, S) => Row): Either[String, Array[Byte]] =
-      exportWb(list, sheetName, headers, enables, newRow) fold (
-        error => Left("export.service.error"),
+    override def bytes[T, S](
+      list: List[T],
+      sheetName: String,
+      headers: Array[String],
+      newRow: (Locale, T, Row) => Row): Either[String, Array[Byte]] =
+      workbook(list, sheetName, headers, newRow) fold (error => Left("export.service.error"),
         wb => Right(getBytes(wb)))
 
-    override def exportWb[T, S](list: List[T], sheetName: String, headers: Array[String], enables: S, newRow: (Locale, T, Row, S) => Row): Either[String, Workbook] =
+    override def workbook[T, S](
+      list: List[T],
+      sheetName: String,
+      headers: Array[String],
+      newRow: (Locale, T, Row) => Row): Either[String, Workbook] =
       try {
 
         val wb: Workbook = new HSSFWorkbook()
@@ -106,13 +110,14 @@ trait ExportExcelServiceImpl extends ExportExcelServiceApi {
 
         //
         // AGREGA HEADER
+        if (logger.isInfoEnabled) logger.info(s"workbook() - headers.length:${headers.length}")
         addHeader(wb, headers, sheet.createRow(0))
 
         //
         // AGREGA FILAS
         val locale = new Locale.Builder().setLanguage("es").setRegion("CL").build()
         list.zipWithIndex.foreach {
-          case (entity, idx) => newRow(locale, entity, sheet.createRow(idx + 1), enables)
+          case (entity, idx) => newRow(locale, entity, sheet.createRow(idx + 1))
         }
 
         //
@@ -127,7 +132,6 @@ trait ExportExcelServiceImpl extends ExportExcelServiceApi {
         case e: Exception => Left("export.service.error")
         case _: Throwable => Left("export.service.error")
       }
-
   }
 
 }
