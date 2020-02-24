@@ -3,7 +3,8 @@ package com.fragnostic.export.spreadsheet
 import java.util.Locale
 
 import com.fragnostic.export.spreadsheet.support.{ BaseTest, SomeRow }
-import org.apache.poi.ss.usermodel.Row
+import org.apache.poi.ss.usermodel.{ Row, Workbook }
+import com.fragnostic.export.spreadsheet.CakeServiceExportSpreadsheet.export
 
 /**
  * Created by fernandobrule on 5/19/17.
@@ -13,6 +14,8 @@ class ExportSpreadsheetTest extends BaseTest {
   describe("Export Spreadsheet Test") {
 
     it("Can Export Spreadsheet") {
+
+      val locale: Locale = new Locale.Builder().setRegion("CL").setLanguage("es").build
 
       val list = List(
         SomeRow("Pepe", "+56 9 7979 7865"),
@@ -27,7 +30,7 @@ class ExportSpreadsheetTest extends BaseTest {
         row
       }
 
-      val wb = CakeServiceExportSpreadsheet.export.workbook(list, sheetName, headers, newRow) fold (
+      val wb: Workbook = export.getWorkbook(locale, list, sheetName, headers, newRow) fold (
         error => throw new IllegalStateException(error),
         wb => wb)
 
@@ -35,7 +38,7 @@ class ExportSpreadsheetTest extends BaseTest {
       println(s"Can Export -> ruta: $ruta")
       fileExists(ruta) should be(false)
 
-      save(wb, ruta)
+      export.save(wb, ruta)
 
       fileExists(ruta) should be(true)
 

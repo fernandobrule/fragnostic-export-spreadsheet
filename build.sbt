@@ -75,11 +75,13 @@ lazy val fragnosticExportSpreadsheet = Project(
   id = "fragnostic-export-spreadsheet",
   base = file("fragnostic-export-spreadsheet")).settings(fragnosticSettings ++ Seq(
     libraryDependencies ++= Seq(
-      scalatest % "test",
+      logbackClassic,
       slf4jApi,
+      scalatest,
       poi,
-      poiOoxml
-    ) ++ specs2.map(_ % "test"),
+      poiOoxml,
+      betterFiles
+    ),
     description := "fragnostic export spreadsheet"
   )
 ) dependsOn(

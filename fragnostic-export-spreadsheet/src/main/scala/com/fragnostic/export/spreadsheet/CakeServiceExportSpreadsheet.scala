@@ -1,5 +1,6 @@
 package com.fragnostic.export.spreadsheet
 
+import com.fragnostic.export.spreadsheet.api.ExportSpreadsheetServiceApi
 import com.fragnostic.export.spreadsheet.impl.ExportSpreadsheetServiceImpl
 
 /**
@@ -7,8 +8,8 @@ import com.fragnostic.export.spreadsheet.impl.ExportSpreadsheetServiceImpl
  */
 object CakeServiceExportSpreadsheet {
 
-  lazy val exportPiece = new ExportSpreadsheetServiceImpl {}
+  lazy val exportPiece: ExportSpreadsheetServiceApi = new ExportSpreadsheetServiceImpl {}
 
-  val export = exportPiece.exportSpreadsheetService
+  lazy val export = exportPiece.exportSpreadsheetService
 
 }
