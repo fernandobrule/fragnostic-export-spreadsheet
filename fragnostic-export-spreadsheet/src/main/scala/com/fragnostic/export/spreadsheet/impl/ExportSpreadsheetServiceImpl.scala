@@ -1,12 +1,15 @@
 package com.fragnostic.export.spreadsheet.impl
 
-import java.io.{ ByteArrayOutputStream, FileOutputStream }
+import java.io._
 import java.util.{ Locale, UUID }
 
 import com.fragnostic.export.spreadsheet.api.ExportSpreadsheetServiceApi
 import org.apache.poi.hssf.usermodel.HSSFWorkbook
 import org.apache.poi.ss.usermodel._
+import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import org.slf4j.LoggerFactory
+
+import scala.util.Try
 
 /**
  * Created by fernandobrule on 5/19/17.
@@ -20,84 +23,75 @@ trait ExportSpreadsheetServiceImpl extends ExportSpreadsheetServiceApi {
 
   def exportSpreadsheetService = new DefaultExportSpreadsheetService()
 
-  def getBytes(wb: Workbook): Array[Byte] = {
-
-    val bos: ByteArrayOutputStream = new ByteArrayOutputStream()
-    try {
-      wb.write(bos)
-    } finally {
-      bos.close()
-    }
-
-    bos.toByteArray
-
-  }
-
-  //
-  // HEADER
-  def addHeader(wb: Workbook, header: Array[String], row: Row): Unit =
-    header.zipWithIndex.foreach {
-      case (head, idx) =>
-        if (logger.isInfoEnabled) logger.info(s"addHeader() - col:$idx - head:$head")
-
-        val cell = row.createCell(idx)
-        cell.setCellValue(head)
-
-        // CELL STYLE
-        val style: CellStyle = wb.createCellStyle()
-        style.setFillBackgroundColor(IndexedColors.GREY_50_PERCENT.getIndex)
-        style.setFillPattern(FillPatternType.NO_FILL)
-
-        // CELL FONT
-        val font: Font = wb.createFont()
-        font.setColor(IndexedColors.GREY_80_PERCENT.getIndex)
-        font.setBold(true)
-        style.setFont(font)
-
-        cell.setCellStyle(style)
-    }
-
   class DefaultExportSpreadsheetService extends ExportSpreadsheetServiceApi {
 
-    override def spreadsheet[T, S](
+    private def addHeader(wb: Workbook, header: Array[String], row: Row): Unit =
+      header.zipWithIndex.foreach {
+        case (head, idx) =>
+          if (logger.isInfoEnabled) logger.info(s"addHeader() - col:$idx - head:$head")
+
+          val cell = row.createCell(idx)
+          cell.setCellValue(head)
+
+          // CELL STYLE
+          val style: CellStyle = wb.createCellStyle()
+          style.setFillBackgroundColor(IndexedColors.GREY_50_PERCENT.getIndex)
+          style.setFillPattern(FillPatternType.NO_FILL)
+
+          // CELL FONT
+          val font: Font = wb.createFont()
+          font.setColor(IndexedColors.GREY_80_PERCENT.getIndex)
+          font.setBold(true)
+          style.setFont(font)
+
+          cell.setCellStyle(style)
+      }
+
+    override def save[T, S](
+      locale: Locale,
       list: List[T],
       basePathExport: String,
       fileName: String,
       sheetName: String,
       headers: Array[String],
       newRow: (Locale, T, Row) => Row): Either[String, String] =
-      bytes(list, sheetName, headers, newRow) fold (error => Left(error),
+      getBytes(locale, list, sheetName, headers, newRow) fold (error => Left(error),
         bytes => {
+
           val uuid = UUID.randomUUID().toString
-          val ruta = s"$basePathExport/$fileName-$uuid.xls"
-          try {
-            val fos: FileOutputStream = new FileOutputStream(ruta)
-            fos.write(bytes)
-            fos.close()
+          val path = s"$basePathExport/$fileName-$uuid.xls"
 
-            if (logger.isInfoEnabled) logger.info(s"export | bytes saved on ruta:$ruta")
+          save(bytes, path) fold (
+            error => Left(error),
+            success => Right(uuid))
 
-            Right(uuid)
-
-          } catch {
-            case e: Exception =>
-              logger.error(s"export | $e")
-              Left("export.service.error")
-            case e: Throwable =>
-              logger.error(s"export | $e")
-              Left("export.service.error")
-          }
         })
 
-    override def bytes[T, S](
+    override def getBytes[T, S](
+      locale: Locale,
       list: List[T],
       sheetName: String,
       headers: Array[String],
       newRow: (Locale, T, Row) => Row): Either[String, Array[Byte]] =
-      workbook(list, sheetName, headers, newRow) fold (error => Left("export.service.error"),
-        wb => Right(getBytes(wb)))
+      getWorkbook(locale, list, sheetName, headers, newRow) fold (
+        error => Left("export.spreadsheet.service.get.bytes.error"),
+        wb => getBytes(wb) fold (
+          error => Left("export.spreadsheet.service.get.bytes.error"),
+          wb => Right(wb)))
 
-    override def workbook[T, S](
+    override def getBytes(workbook: Workbook): Either[String, Array[Byte]] = ???
+    /*
+    this does not work
+    {
+      val baos: ByteArrayOutputStream = new ByteArrayOutputStream()
+      workbook.write(baos)
+      baos.close()
+      Right(baos.toByteArray)
+    }
+    */
+
+    override def getWorkbook[T, S](
+      locale: Locale,
       list: List[T],
       sheetName: String,
       headers: Array[String],
@@ -105,7 +99,6 @@ trait ExportSpreadsheetServiceImpl extends ExportSpreadsheetServiceApi {
       try {
 
         val wb: Workbook = new HSSFWorkbook()
-        val createHelper: CreationHelper = wb.getCreationHelper
         val sheet: Sheet = wb.createSheet(sheetName)
 
         //
@@ -115,7 +108,6 @@ trait ExportSpreadsheetServiceImpl extends ExportSpreadsheetServiceApi {
 
         //
         // AGREGA FILAS
-        val locale = new Locale.Builder().setLanguage("es").setRegion("CL").build()
         list.zipWithIndex.foreach {
           case (entity, idx) => newRow(locale, entity, sheet.createRow(idx + 1))
         }
@@ -129,9 +121,56 @@ trait ExportSpreadsheetServiceImpl extends ExportSpreadsheetServiceApi {
         Right(wb)
 
       } catch {
-        case e: Exception => Left("export.service.error")
-        case _: Throwable => Left("export.service.error")
+        case e: Exception => Left("export.spreadsheet.service.get.workbook.error")
+        case _: Throwable => Left("export.spreadsheet.service.get.workbook.error")
       }
+
+    override def getWorkbook(bytes: Array[Byte]): Either[String, Workbook] = {
+
+      val os: OutputStream = new ByteArrayOutputStream(bytes.length)
+      os.write(bytes, 0, bytes.length)
+
+      val wb: Workbook = new HSSFWorkbook()
+      wb.write(os)
+
+      Right(wb)
+    }
+
+    override def getWorkbook(path: String): Either[String, Workbook] = {
+      val fis: FileInputStream = new FileInputStream(new File(path))
+      if (path.endsWith(".xls")) {
+        Try(new HSSFWorkbook(fis)) fold (
+          error => {
+            logger.error(s"getWorkbook() - $error\n\tpath:$path")
+            Left("export.spreadsheet.service.get.workbook.error.1")
+          },
+          wb => Right(wb))
+      } else if (path.endsWith(".xlsx")) {
+        Try(new XSSFWorkbook(fis)) fold (
+          error => {
+            logger.error(s"getWorkbook() - $error\n\tpath:$path")
+            Left("export.spreadsheet.service.get.workbook.error.2")
+          },
+          wb => Right(wb))
+      } else {
+        Left("export.spreadsheet.service.get.workbook.error.wrong.extension")
+      }
+    }
+
+    override def save(workbook: Workbook, path: String): Either[String, String] = {
+      val fileOut: FileOutputStream = new FileOutputStream(path)
+      workbook.write(fileOut)
+      fileOut.close()
+      Right("export.spreadsheet.service.save.workbook.success")
+    }
+
+    override def save(bytes: Array[Byte], path: String): Either[String, String] = {
+      val fos: FileOutputStream = new FileOutputStream(path)
+      fos.write(bytes)
+      fos.close()
+      Right("export.spreadsheet.service.save.bytes.success")
+    }
+
   }
 
 }
