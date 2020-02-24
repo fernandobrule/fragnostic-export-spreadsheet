@@ -1,13 +1,13 @@
-package com.fragnostic.export.spreadsheet.impl
+package com.fragnostic.spreadsheet.impl
 
 import java.io._
 import java.util.{ Locale, UUID }
 
-import com.fragnostic.export.spreadsheet.api.ExportSpreadsheetServiceApi
+import com.fragnostic.spreadsheet.api.SpreadsheetServiceApi
 import org.apache.poi.hssf.usermodel.HSSFWorkbook
 import org.apache.poi.ss.usermodel._
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
-import org.slf4j.LoggerFactory
+import org.slf4j.{ Logger, LoggerFactory }
 
 import scala.util.Try
 
@@ -17,13 +17,21 @@ import scala.util.Try
  * https://poi.apache.org/spreadsheet/quick-guide.html
  *
  */
-trait ExportSpreadsheetServiceImpl extends ExportSpreadsheetServiceApi {
+trait SpreadsheetServiceImpl extends SpreadsheetServiceApi {
 
-  private def logger = LoggerFactory.getLogger(getClass)
+  private[this] val logger: Logger = LoggerFactory.getLogger(getClass.getName)
 
-  def exportSpreadsheetService = new DefaultExportSpreadsheetService()
+  def spreadsheetService = new DefaultSpreadsheetService()
 
-  class DefaultExportSpreadsheetService extends ExportSpreadsheetServiceApi {
+  class DefaultSpreadsheetService extends SpreadsheetServiceApi {
+
+    private final val tmpDir: String = System.getProperty("java.io.tmpdir")
+
+    private def getTmpPath: String = {
+      val name: String = UUID.randomUUID().toString
+      val extension: String = "xls"
+      s"$tmpDir/$name.$extension"
+    }
 
     private def addHeader(wb: Workbook, header: Array[String], row: Row): Unit =
       header.zipWithIndex.foreach {
@@ -50,18 +58,18 @@ trait ExportSpreadsheetServiceImpl extends ExportSpreadsheetServiceApi {
     override def save[T, S](
       locale: Locale,
       list: List[T],
-      basePathExport: String,
+      basePath: String,
       fileName: String,
       sheetName: String,
       headers: Array[String],
       newRow: (Locale, T, Row) => Row): Either[String, String] =
-      getBytes(locale, list, sheetName, headers, newRow) fold (error => Left(error),
-        bytes => {
+      getWorkbook(locale, list, sheetName, headers, newRow) fold (error => Left(error),
+        wb => {
 
           val uuid = UUID.randomUUID().toString
-          val path = s"$basePathExport/$fileName-$uuid.xls"
+          val path = s"$basePath/$fileName-$uuid.xls"
 
-          save(bytes, path) fold (
+          save(wb, path) fold (
             error => Left(error),
             success => Right(uuid))
 
@@ -74,21 +82,32 @@ trait ExportSpreadsheetServiceImpl extends ExportSpreadsheetServiceApi {
       headers: Array[String],
       newRow: (Locale, T, Row) => Row): Either[String, Array[Byte]] =
       getWorkbook(locale, list, sheetName, headers, newRow) fold (
-        error => Left("export.spreadsheet.service.get.bytes.error"),
+        error => Left("spreadsheet.service.get.bytes.error"),
         wb => getBytes(wb) fold (
-          error => Left("export.spreadsheet.service.get.bytes.error"),
+          error => Left("spreadsheet.service.get.bytes.error"),
           wb => Right(wb)))
 
-    override def getBytes(workbook: Workbook): Either[String, Array[Byte]] = ???
-    /*
-    this does not work
-    {
-      val baos: ByteArrayOutputStream = new ByteArrayOutputStream()
-      workbook.write(baos)
-      baos.close()
-      Right(baos.toByteArray)
+    override def getBytes(workbook: Workbook): Either[String, Array[Byte]] = {
+      /*
+      this does not work
+      {
+        val baos: ByteArrayOutputStream = new ByteArrayOutputStream()
+        workbook.write(baos)
+        baos.close()
+        Right(baos.toByteArray)
+      }
+      --------------------------------
+      A workarround will be used
+      --------------------------------
+      */
+      val tmpPath: String = getTmpPath
+      save(workbook, tmpPath) fold (
+        error => Left("spreadsheet.service.get.bytes.error"),
+        success => {
+          import better.files.{ File => BFFile }
+          Right(BFFile(tmpPath).loadBytes)
+        })
     }
-    */
 
     override def getWorkbook[T, S](
       locale: Locale,
@@ -121,19 +140,21 @@ trait ExportSpreadsheetServiceImpl extends ExportSpreadsheetServiceApi {
         Right(wb)
 
       } catch {
-        case e: Exception => Left("export.spreadsheet.service.get.workbook.error")
-        case _: Throwable => Left("export.spreadsheet.service.get.workbook.error")
+        case e: Exception => Left("spreadsheet.service.get.workbook.error")
+        case _: Throwable => Left("spreadsheet.service.get.workbook.error")
       }
 
     override def getWorkbook(bytes: Array[Byte]): Either[String, Workbook] = {
+      val tmpPath: String = getTmpPath
+      val file: File = new File(tmpPath)
+      val os: OutputStream = new FileOutputStream(file)
+      os.write(bytes)
+      os.close()
 
-      val os: OutputStream = new ByteArrayOutputStream(bytes.length)
-      os.write(bytes, 0, bytes.length)
+      getWorkbook(tmpPath) fold (
+        error => Left(error),
+        wb => Right(wb))
 
-      val wb: Workbook = new HSSFWorkbook()
-      wb.write(os)
-
-      Right(wb)
     }
 
     override def getWorkbook(path: String): Either[String, Workbook] = {
@@ -142,18 +163,18 @@ trait ExportSpreadsheetServiceImpl extends ExportSpreadsheetServiceApi {
         Try(new HSSFWorkbook(fis)) fold (
           error => {
             logger.error(s"getWorkbook() - $error\n\tpath:$path")
-            Left("export.spreadsheet.service.get.workbook.error.1")
+            Left("spreadsheet.service.get.workbook.error.1")
           },
           wb => Right(wb))
       } else if (path.endsWith(".xlsx")) {
         Try(new XSSFWorkbook(fis)) fold (
           error => {
             logger.error(s"getWorkbook() - $error\n\tpath:$path")
-            Left("export.spreadsheet.service.get.workbook.error.2")
+            Left("spreadsheet.service.get.workbook.error.2")
           },
           wb => Right(wb))
       } else {
-        Left("export.spreadsheet.service.get.workbook.error.wrong.extension")
+        Left("spreadsheet.service.get.workbook.error.wrong.extension")
       }
     }
 
@@ -161,14 +182,14 @@ trait ExportSpreadsheetServiceImpl extends ExportSpreadsheetServiceApi {
       val fileOut: FileOutputStream = new FileOutputStream(path)
       workbook.write(fileOut)
       fileOut.close()
-      Right("export.spreadsheet.service.save.workbook.success")
+      Right("spreadsheet.service.save.workbook.success")
     }
 
     override def save(bytes: Array[Byte], path: String): Either[String, String] = {
       val fos: FileOutputStream = new FileOutputStream(path)
       fos.write(bytes)
       fos.close()
-      Right("export.spreadsheet.service.save.bytes.success")
+      Right("spreadsheet.service.save.bytes.success")
     }
 
   }

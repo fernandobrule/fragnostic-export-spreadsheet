@@ -1,21 +1,19 @@
-package com.fragnostic.export.spreadsheet
+package com.fragnostic.spreadsheet
 
 import java.util.Locale
 
-import com.fragnostic.export.spreadsheet.support.{ BaseTest, SomeRow }
+import com.fragnostic.spreadsheet.support.{ AbstractTest, SomeRow }
 import org.apache.poi.ss.usermodel.{ Row, Workbook }
-import com.fragnostic.export.spreadsheet.CakeServiceExportSpreadsheet.export
+import com.fragnostic.spreadsheet.CakeServiceSpreadsheet.spreadsheet
 
 /**
  * Created by fernandobrule on 5/19/17.
  */
-class ExportSpreadsheetTest extends BaseTest {
+class GetWorkbookFromDataTest extends AbstractTest {
 
-  describe("Export Spreadsheet Test") {
+  describe("Get Workbook From Data Test") {
 
-    it("Can Export Spreadsheet") {
-
-      val locale: Locale = new Locale.Builder().setRegion("CL").setLanguage("es").build
+    it("Can Get Workbook From Data") {
 
       val list = List(
         SomeRow("Pepe", "+56 9 7979 7865"),
@@ -30,15 +28,14 @@ class ExportSpreadsheetTest extends BaseTest {
         row
       }
 
-      val wb: Workbook = export.getWorkbook(locale, list, sheetName, headers, newRow) fold (
+      val wb: Workbook = spreadsheet.getWorkbook(locale, list, sheetName, headers, newRow) fold (
         error => throw new IllegalStateException(error),
         wb => wb)
 
       val ruta = s"$basePath/workbook-$randomInt.xls"
-      println(s"Can Export -> ruta: $ruta")
       fileExists(ruta) should be(false)
 
-      export.save(wb, ruta)
+      spreadsheet.save(wb, ruta)
 
       fileExists(ruta) should be(true)
 
