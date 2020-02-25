@@ -32,8 +32,6 @@ trait SpreadsheetServiceImpl extends SpreadsheetServiceApi {
     private def addHeader(wb: Workbook, header: Array[String], row: Row): Unit =
       header.zipWithIndex.foreach {
         case (head, idx) =>
-          if (logger.isInfoEnabled) logger.info(s"addHeader() - col:$idx - head:$head")
-
           val cell = row.createCell(idx)
           cell.setCellValue(head)
 
