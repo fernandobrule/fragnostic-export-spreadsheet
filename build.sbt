@@ -40,18 +40,18 @@ lazy val fragnosticSettings = Seq(
 )
 
 lazy val fragnosticProject = Project(
-  id = "fragnostic-export-spreadsheet-project",
+  id = "fragnostic-spreadsheet-project",
   base = file(".")).settings(
     fragnosticSettings ++ Seq(
-    name := "fragnostic-export-spreadsheet",
+    name := "fragnostic-spreadsheet",
     artifacts := Classpaths.artifactDefs(Seq(packageDoc in Compile, makePom in Compile)).value,
     packagedArtifacts := Classpaths.packaged(Seq(packageDoc in Compile, makePom in Compile)).value,
-    description := "fragnostic*export*spreadsheet",
+    description := "frg*spreadsheet",
     shellPrompt := { state =>
       s"sbt:${Project.extract(state).currentProject.id}" + Def.withColor("> ", Option(scala.Console.CYAN))
     }
   )).aggregate(
-    fragnosticExportSpreadsheet
+    fragnosticSpreadsheet
   ).enablePlugins()
  
 lazy val manifestSetting = packageOptions += {
@@ -71,9 +71,9 @@ lazy val manifestSetting = packageOptions += {
 
 lazy val doNotPublish = Seq(publish := {}, publishLocal := {}, PgpKeys.publishSigned := {}, PgpKeys.publishLocalSigned := {})
 
-lazy val fragnosticExportSpreadsheet = Project(
-  id = "fragnostic-export-spreadsheet",
-  base = file("fragnostic-export-spreadsheet")).settings(fragnosticSettings ++ Seq(
+lazy val fragnosticSpreadsheet = Project(
+  id = "fragnostic-spreadsheet",
+  base = file("fragnostic-spreadsheet")).settings(fragnosticSettings ++ Seq(
     libraryDependencies ++= Seq(
       logbackClassic,
       slf4jApi,
@@ -82,7 +82,7 @@ lazy val fragnosticExportSpreadsheet = Project(
       poiOoxml,
       betterFiles
     ),
-    description := "fragnostic export spreadsheet"
+    description := "fragnostic spreadsheet"
   )
 ) dependsOn(
 )
