@@ -20,13 +20,9 @@ abstract class AbstractTest extends FunSpec with Matchers {
   lazy val pathXls: String = BFResource.getUrl(fileNameXls).getPath
   lazy val pathXlsx: String = BFResource.getUrl(fileNameXlsx).getPath
 
-  val userUtcTime: String = ""
-  val token: Option[String] = None
   val basePath = "target"
 
-  def random = new Random()
-
-  def randomInt: Int = random.nextInt(10000)
+  def randomInt: Int = Random.nextInt(10000)
 
   def fileExists(ruta: String): Boolean = new File(ruta).exists()
 

@@ -1,15 +1,16 @@
 package com.fragnostic.spreadsheet.impl
 
-import java.io._
+import java.io.OutputStream
 import java.util.{ Locale, UUID }
 
+import better.files.{ File => BFFile, _ }
 import com.fragnostic.spreadsheet.api.SpreadsheetServiceApi
 import org.apache.poi.hssf.usermodel.HSSFWorkbook
 import org.apache.poi.ss.usermodel._
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import org.slf4j.{ Logger, LoggerFactory }
 
-import scala.util.Try
+import scala.util.{ Failure, Success, Try }
 
 /**
  * Created by fernandobrule on 5/19/17.
@@ -26,12 +27,7 @@ trait SpreadsheetServiceImpl extends SpreadsheetServiceApi {
   class DefaultSpreadsheetService extends SpreadsheetServiceApi {
 
     private final val tmpDir: String = System.getProperty("java.io.tmpdir")
-
-    private def getTmpPath: String = {
-      val name: String = UUID.randomUUID().toString
-      val extension: String = "xls"
-      s"$tmpDir/$name.$extension"
-    }
+    private final val extensionXls: String = "xls"
 
     private def addHeader(wb: Workbook, header: Array[String], row: Row): Unit =
       header.zipWithIndex.foreach {
@@ -41,12 +37,10 @@ trait SpreadsheetServiceImpl extends SpreadsheetServiceApi {
           val cell = row.createCell(idx)
           cell.setCellValue(head)
 
-          // CELL STYLE
           val style: CellStyle = wb.createCellStyle()
           style.setFillBackgroundColor(IndexedColors.GREY_50_PERCENT.getIndex)
           style.setFillPattern(FillPatternType.NO_FILL)
 
-          // CELL FONT
           val font: Font = wb.createFont()
           font.setColor(IndexedColors.GREY_80_PERCENT.getIndex)
           font.setBold(true)
@@ -55,25 +49,21 @@ trait SpreadsheetServiceImpl extends SpreadsheetServiceApi {
           cell.setCellStyle(style)
       }
 
+    private def getTmpPath: String = s"$tmpDir/${UUID.randomUUID().toString}.$extensionXls"
+
+    private def write(os: OutputStream, bytes: Array[Byte]): Unit = os.write(bytes)
+
     override def save[T, S](
       locale: Locale,
       list: List[T],
-      basePath: String,
-      fileName: String,
+      path: String,
       sheetName: String,
       headers: Array[String],
       newRow: (Locale, T, Row) => Row): Either[String, String] =
       getWorkbook(locale, list, sheetName, headers, newRow) fold (error => Left(error),
-        wb => {
-
-          val uuid = UUID.randomUUID().toString
-          val path = s"$basePath/$fileName-$uuid.xls"
-
-          save(wb, path) fold (
-            error => Left(error),
-            success => Right(uuid))
-
-        })
+        wb => save(wb, path) fold (
+          error => Left(error),
+          success => Right("spreadsheet.service.save.success")))
 
     override def getBytes[T, S](
       locale: Locale,
@@ -103,10 +93,7 @@ trait SpreadsheetServiceImpl extends SpreadsheetServiceApi {
       val tmpPath: String = getTmpPath
       save(workbook, tmpPath) fold (
         error => Left("spreadsheet.service.get.bytes.error"),
-        success => {
-          import better.files.{ File => BFFile }
-          Right(BFFile(tmpPath).loadBytes)
-        })
+        success => Right(BFFile(tmpPath).loadBytes))
     }
 
     override def getWorkbook[T, S](
@@ -115,59 +102,41 @@ trait SpreadsheetServiceImpl extends SpreadsheetServiceApi {
       sheetName: String,
       headers: Array[String],
       newRow: (Locale, T, Row) => Row): Either[String, Workbook] =
-      try {
-
+      Try({
         val wb: Workbook = new HSSFWorkbook()
         val sheet: Sheet = wb.createSheet(sheetName)
 
-        //
-        // AGREGA HEADER
-        if (logger.isInfoEnabled) logger.info(s"workbook() - headers.length:${headers.length}")
         addHeader(wb, headers, sheet.createRow(0))
 
-        //
-        // AGREGA FILAS
         list.zipWithIndex.foreach {
           case (entity, idx) => newRow(locale, entity, sheet.createRow(idx + 1))
         }
 
-        //
-        // AUTO AJUSTA ANCHO DE COLUMNAS
         headers.zipWithIndex.foreach {
           case (head, idx) => sheet.autoSizeColumn(idx)
         }
 
         Right(wb)
-
-      } catch {
-        case e: Exception => Left("spreadsheet.service.get.workbook.error")
-        case _: Throwable => Left("spreadsheet.service.get.workbook.error")
-      }
+      }) getOrElse (Left("spreadsheet.service.get.workbook.error"))
 
     override def getWorkbook(bytes: Array[Byte]): Either[String, Workbook] = {
       val tmpPath: String = getTmpPath
-      val file: File = new File(tmpPath)
-      val os: OutputStream = new FileOutputStream(file)
-      os.write(bytes)
-      os.close()
-
+      BFFile(tmpPath).outputStream.foreach(write(_, bytes))
       getWorkbook(tmpPath) fold (
         error => Left(error),
         wb => Right(wb))
-
     }
 
-    override def getWorkbook(path: String): Either[String, Workbook] = {
-      val fis: FileInputStream = new FileInputStream(new File(path))
+    override def getWorkbook(path: String): Either[String, Workbook] =
       if (path.endsWith(".xls")) {
-        Try(new HSSFWorkbook(fis)) fold (
+        Try(new HSSFWorkbook(BFFile(path).newFileInputStream)) fold (
           error => {
             logger.error(s"getWorkbook() - $error\n\tpath:$path")
             Left("spreadsheet.service.get.workbook.error.1")
           },
           wb => Right(wb))
       } else if (path.endsWith(".xlsx")) {
-        Try(new XSSFWorkbook(fis)) fold (
+        Try(new XSSFWorkbook(BFFile(path).newFileInputStream)) fold (
           error => {
             logger.error(s"getWorkbook() - $error\n\tpath:$path")
             Left("spreadsheet.service.get.workbook.error.2")
@@ -176,21 +145,30 @@ trait SpreadsheetServiceImpl extends SpreadsheetServiceApi {
       } else {
         Left("spreadsheet.service.get.workbook.error.wrong.extension")
       }
-    }
 
-    override def save(workbook: Workbook, path: String): Either[String, String] = {
-      val fileOut: FileOutputStream = new FileOutputStream(path)
-      workbook.write(fileOut)
-      fileOut.close()
-      Right("spreadsheet.service.save.workbook.success")
-    }
+    override def save(workbook: Workbook, path: String): Either[String, String] =
+      Try(
+        for {
+          fileOut <- BFFile(path).newFileOutputStream().autoClosed
+        } yield {
+          workbook.write(fileOut)
+        }) match {
+          case Success(_) => Right("spreadsheet.service.save.workbook.success")
+          case Failure(exception) =>
+            logger.error(s"save() - $exception")
+            Left("spreadsheet.service.save.workbook.fail")
+        }
 
-    override def save(bytes: Array[Byte], path: String): Either[String, String] = {
-      val fos: FileOutputStream = new FileOutputStream(path)
-      fos.write(bytes)
-      fos.close()
-      Right("spreadsheet.service.save.bytes.success")
-    }
+    override def save(bytes: Array[Byte], path: String): Either[String, String] =
+      Try(
+        for {
+          fos <- BFFile(path).newFileOutputStream().autoClosed
+        } write(fos, bytes)) match {
+          case Success(_) => Right("spreadsheet.service.save.bytes.success")
+          case Failure(exception) =>
+            logger.error(s"save() - $exception")
+            Left("spreadsheet.service.save.bytes.fail")
+        }
 
   }
 

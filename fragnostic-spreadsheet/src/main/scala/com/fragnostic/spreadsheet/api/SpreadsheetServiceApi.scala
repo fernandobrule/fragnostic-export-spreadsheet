@@ -23,7 +23,7 @@ trait SpreadsheetServiceApi {
 
     def getWorkbook(bytes: Array[Byte]): Either[String, Workbook]
 
-    def save[T, S](locale: Locale, list: List[T], basePath: String, fileName: String, sheetName: String, headers: Array[String], newRow: (Locale, T, Row) => Row): Either[String, String]
+    def save[T, S](locale: Locale, list: List[T], path: String, sheetName: String, headers: Array[String], newRow: (Locale, T, Row) => Row): Either[String, String]
 
     def save(bytes: Array[Byte], path: String): Either[String, String]
 
